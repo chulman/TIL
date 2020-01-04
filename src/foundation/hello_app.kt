@@ -2,8 +2,10 @@ package foundation
 
 //unit is void
 fun main(args: Array<String>): Unit {
-//    println("hello kotlin!!")
-    //표현식 (expression), kotlin에서는 해당 표현식에서 에러가 나지 않음.
+
+    println("hello kotlin!!")
+
+    //표현식 (expression), kotlin 에서는 해당 표현식에서 에러가 나지 않음.
     34 + 23 - 100
 
     //var(Variable) : mutable
