@@ -41,6 +41,76 @@
     + 그렇기 때문에 반드시 ACID가 보장될 필요는 없다.
 
 
+### MongoDB CRUD
+
+- https://docs.mongodb.com/manual/crud/
+
+1. 생성
+
+- 컬렉션이 존재하지 않으면 생성 존재하면 삽입
+
+> insert into users(name, age) values('choi', 100)
+
+```
+db.users.insertOne(                <- collection
+    {
+        name: "choi",              <- field
+        age: 100                   <- field
+    }
+)
+```
+
+2. 읽기 
+
+> select _id, name from users where age > 18 limit 5
+
+```  
+db.users.find(                      <- collection
+    { age : { $gt : 18 } },         <- query criteria
+    { name: 1 }                     <- projection             
+).limit(5)                          <- cursur modifier
+```
+
+- 쿼리의 처리 순서는 Collection 선택 -> Criteria 수행 -> Modifier 수행
+
+```  
+db.users.find(                      
+    { age : { $gt : 18 } },         
+    { name: 1, _id: 0 }                          
+).limit(5)                          
+```
+
+- projection(추출할 값)의 필드가 0이면, 제외하겠다는 의미를 갖는다.
+
+
+3. 수정
+
+> update users set name="kim" where age > 25
+
+```  
+db.users.update(                      
+    { age : { $gt : 25 } },         <- update criteria
+    { $set: { name : "kim" }},      <- update action
+    { multi: true }                 <- update option
+)
+
+```
+
+- update option 중 upsert 키워드가 있는데 update 할 document가 없을 경우 insert 해준다.
+
+
+4. 삭제
+
+delete from users where age > 25
+
+```
+db.users.remove (
+    { age : { $gt : 25 } } 
+)
+
+``` 
+
+
 
 
 
