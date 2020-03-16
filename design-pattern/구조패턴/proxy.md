@@ -62,7 +62,7 @@ public class PrinterProxy implements Printable {
 		this.name=name;
 	}
 	
-    public synchronized void realize() { // '본인'을 생성
+    public synchronized void realize() { // 실제로 프록시 객체가 실행학고 행동할 실제 객체 생성 
 		if(real==null) {
 			real=new Printer(name);
 		}
