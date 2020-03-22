@@ -24,6 +24,17 @@
 - 네티는 결국 저수준의 자바 API(Selector, Future.. 등)를 감싼 프레임워크로써 고수준의 API를 제공한다.
 
 ## 2장. 네티 애플리케이션
+- 모든 네티 서버는 하나 이상의 ChannelHandler와 bootstrap이 필요함
+    + channelHandler: 클라이언트로부터 전송받은 데이터를 서버측에서 처리하는 비지니스 로직을 구성
+    + bootstrap : 서버를 구성하는 시동 코드를 의미한다. 한마디로 서버를 구동하기 위한 옵션을 설정하는 헬퍼 클래스  
+- 채널핸들러에서 read, readComplete, exceptionCaught 등 처리를 할 수 있는데 예외의 경우 핸들러 체인 어디에서도 처리되지 않을 경우지 수신된 예외가 파이프라인의 끝까지 이동한후에 로깅한다.
+
+- simpleChannelInboundHandler와 ChannelInboundHandler 비교
+    + channelRead 시점에 netty의 설정에 따라 handler는 heap memory 혹은 native memory 영역에 할당된 byteBuf를 참조한다.
+    + simpleChannelInboundHandler는 channelRead()를 완료하고 반환하는 시점에 핸들러가 참조한 byteBuf에 대한 메모리 참조를 해제한다. 
+
+- [에코 서버/클라이언트 예제 구현해보기](https://swiftymind.tistory.com/56?category=694951)     
+   
 
 ## 3장. 네티 컴포넌트 설계
 
