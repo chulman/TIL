@@ -11,7 +11,7 @@
 - 미니멀 한 기능을 제공하는 Classic LB, 좀 더 안정적으로 발전한 Network LB, URL/domain/service(Layer 7) 단위로 분산할 수 있는 Application LB가 있음
 
 
-
+- 로드밸런서 종류는 내부/외부가 존재하고, 내부 로드밸런서로 선택하면 VPC 내부망에서만 접근이 가능하다.
 
 
 # AWS Auto Scaling Group
