@@ -75,6 +75,91 @@
 
 ## 5장. ByteBuf
 
+- 네티의 기본 데이터 전송방식은 항상 바이트
+    + 복잡한 자바 NIO API ByteBuffer를 대체하는 ByteBuf 추상클래스와 ByteBufHolder 인터페이스를 제공한다.
+
+> 장점
+- 사용자 정의 버퍼 형식으로 확장 할 수 있음
+- 내장 복합 버퍼 형식을 통해 투명한 제로 카피를 달성할 수 있음
+- 용량을 필요에 따라 확장할 수 있음
+- ByteBuffer의 flip 메소드를 호출하는 것 없이 간단하게 read,write 모드를 전환할 수 있음
+- 읽기와 쓰기에 고유 인덱스를 적용함
+- 메소드 체인이 지원
+- 참조 카운팅 지원
+- 풀링 지원
+
+> 인덱스
+- ByteBuf 배열에는 인덱스가 존재하며, 읽기/쓰기 시에 인덱스가 증가하며 ByteBuf index의 범위 밖에서 읽으려면 exception이 발생함
+
+> 메모리 할당 및 해제 
+- 네티는 메모리 할당과 해제 시 발생하는 오버헤드를 줄이기 위해 ByteBufAllocator 인터페이스를 통해 풀링을 구현할 수 있다.
+- 기본적으로 PooledByteBufAllocator를 이용하지만 ChannelConfig 혹은 bootstrap을 통해 다른 할당자를 지정할 수 있다.
+
+> 사용 패턴
+
+### 1. 힙버퍼
+
+- JVM 힙영역에 데이터를 저장한다.
+- 풀링이 사용되지 않은 경우 빠른 할당과 해제 속도를 보여준다.
+- 다이렉트 버퍼에 비해 느릴 수 있음. 하지만 메모리 영역의 관리가 jvm heap에 포함되기 때문에 관리는 용이
+```java
+ByteBuf heapBuf = ...;
+
+if(heapBuf.hashArray()){  // 보조배열이 있는지 여부 체크
+    byte[] array = heapBuf.array(); // 참조 할당
+    ...
+}
+```
+
+### 2.다이렉트 버퍼
+
+- 네이티브 영역에 메모리 할당을 허용
+- 그렇기 때문에 장점은 결국 성능. 입출력 속도가 빠르다. 
+- 다이렉트 버퍼의 내용이 내용은 일반적으로 가비지 컬렉션이 적용되는 힙 바깥에 위치한다.
+- 데이터가 힙 할당 버퍼에 있으면 JVM은 소켓을 통해 전송하기 전 내부적으로 버퍼를 다이렉트 버퍼로 복사한다.
+- 단점은 관리가 어렵다.(메모리의 할당 및 해제의 부담 비용)
+
+```java
+ByteBuf directBuf = ...;
+
+if(!directBuf.hashArray()){  // 보조배열이 없으면 다이렉트 버퍼
+    byte[] array = new Byte[directBuf.readableBytes()];
+    directBuf.getBytes(directBuf.readerIndex(), array);     // array 배열로 복사
+    ...
+}
+```
+
+### 3. 복합 버퍼
+
+- ByteBuf 인스턴스를 필요에 따라 추가 및 삭제를 할 수 있다.
+    + CompositeByteBuf를 이용해야 하는데 경험에 비춰 보면 바이트 헤더와 바디의 분리를 예를 들 수 있다. 
+    + 일반적으로 바이트 데이터를 보낼 때 헤더에 사이즈를 지정해서 보내는데 ByteBuf 헤더와 바디를 구분하여 불필요하게 재생성 및 할당을 할 필요가 없다.
+
+```java
+// 복합 패턴을 이용한 byteBuf 생성 
+CompositeByteBuf messageBuf = Unpooled.compositeBuffer();)
+ByteBuf headerBuf = ...;
+ByteBuf bodyBuf = ...;
+
+messageBuf.addComponent(headerBuf, bodyBuf);
+messageBuf.removeComponent(0); //header buf 삭제
+
+
+```
+
+> ByteBufHolder 인터페이스
+
+- 실제 데이터 페이로드와 함께 다양한 속성 값을 저장해야 하는 경우가 많다.
+    + 예를 들면 http response의 경우 상태 코드 및 쿠키
+
+> 참조 카운팅
+- 다른 객체에서 더 이상 참조하지 않ㄴ는 객체가 보유한 리소스를 해제해 메모리 사용량과 성능을 최적화하는 기법
+- 일반적으로 활성 참조 카운트 1을 가지고 시작하며, 참조 카운트가 1 이상이면 객체가 해제되지 않지만 0으로 감소하면 인스턴스가 해제된다.
+- 해제의 책임은 일반적으로 객체에 마지막으로 접근하는 영역에 있다.
+- 특정 객체에 대한 활성 참조의 수를 추적하는데 바탕을 둔다.
+
+
+   
 ## 6장. ChannelHandler 와 ChannelPipeline
 
 ## 7장. EventLoop 와 스레딩 모델
