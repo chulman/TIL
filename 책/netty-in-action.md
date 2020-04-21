@@ -162,6 +162,139 @@ messageBuf.removeComponent(0); //header buf 삭제
    
 ## 6장. ChannelHandler 와 ChannelPipeline
 
+###  Channel 수명주기
+
+-  ChannelRegister -> ChannelActive -> ChannelInactive ->  Channel UnRegister
+
+- ChannelRegister : 채널이 EventLoop에 등록됨
+- ChannelActive : 채널이 활성화됨(피어와 연결됨)
+- ChannelInactive : 피어와 연결되지 않음
+- ChannelUnRegistered : 채널이 생성됐지만 eventloop에 등록되지 않음
+
+### ChannelHandler 생명주기
+
+- HandlerAdded : 파이프라인에 채널 핸들러가 추가될 때 호출됨
+- HandlerRemoved : 파이프라인에 채널 핸들러가 제거될 때 호출됨
+-  ExceptionCaught  : 채널파이프라인에서 처리 중 에러가 발생했을 때 호출됨
+
+> InboundHandler
+
+- 인바운드 핸들러는 모든 유형의 인바운드 데이터와 상태 변경을 처리한다.
+- 인바운드 핸들러 인터페이스는 보통 ChannelInboundHandlerAdapter, SimPleChannelInboundHandler를 통해 구현한다.
+
+- ChannelInboundHandlerAdapter를 상속받아 channelRead를 구현한 경우, byteBuf의 release를 명시적으로 구현해야 한다.
+```java
+public class DisCardHandler extends ChannelInboundHandlerAdapter {
+    @Override
+    public void channelRead(ChannelHandlerContext ctx, Object msg){
+        ReferenceUtils.release(msg);
+    }
+}
+```
+
+- 그러나 이렇게 매번 리소스를 관리하기는 여간 어려운게 아니다. 그래서 SimPleChannelInboundHandler를 사용하면 명시적으로 해제하는 작업을 하지 않아도 된다.
+
+> OutBoundHandler
+
+- 아웃바운드 데이터를 처리하고 모든 작업의 가로채기를 허용한다.
+
+- ChannelOutBoundHandler는 주문식으로 작업이나 이벤트를 지연하는 강력한 기능이 있어 정교하게 요청을 처리할 수 있다. 예를 들어 원격 피어에 대한 기록이 일시 중단된 경우 플러시 작업을 지연하고 추후 재개할 수 있다.
+
+> ChannelHandlerAdapter
+
+- ChannelHandler를 작성하는 시작점으로 ChannelInboundAdapter와 ChanelOutBoundAdpter 클래스를 이용할 수 있다.
+- 각각 어뎁터는 ChannelHandler 인터페이스를 구현한 인터페이스이다.
+- 각 인터페이스에서 제공되는 메서드 본문에서는 구현된 ChannelHandlerContext의 해당 메소드를 호출해 이벤트를 파이프라인의 다음 채널 핸들러로 전달한다.
+
+### 리소스 관리
+
+- 각 핸들러의 ChannelRead 또는 write를 호출해 데이터를 대상으로 작업할 때는 리소스 누출이 발생하지 않게 주의해야 한다.
+- 앞서 살펴본 것 처럼 네티는 referenceCount를 통해 풀링되는 bytebuf를 관리하는데, 사용이 끝난 bytebuf에 대해 참조 카운트를 조정하는 것은 중요하다.
+
+- 그래서 네티는 잠재적인 문제 진단을 돕기 위해 애플리케이션 버퍼 할당의 약 1%를 샘플링해 메모리 누출을 검사하는 ResourceLeakDetector 클래스를 제공한다.
+- 누출 감지 수준은 다음과 같으며 jvm option으로 조정이 가능하다. 
+
+> java -Dio.netty.leakDetectionLEVEL=ADVANCED
+
+- DISABLED : 누출 감지를 비활성화한다. 이 설정은 포괄정인 테스트를 거친 후에만 이용한다.
+- SIMPLE : 기본 샘플링 비율 1%를 이용해 발견된 누출을 보고한다. 기본 샘플링 비율은 대부분 경우에 적합하다.
+- ADVANCED : 발견된 누출과 메시지에 접근한 위치를 보고한다. 기본 샘플링 비율을 이용한다.
+- PARANOID : ADVANCED와 비슷하지만 모든 접근을 샘플링한다. 성능에 큰 영향을 미치므로 디버그 단계에서만 이용한다.
+
+### ChannelPipeLine
+
+- ChannelPipeLine을 채널을 통해 오가는 인바운드 아웃바운드 이벤트를 가로채는 채널핸들러 인스턴스의 체인이라고 생각하면, 채널 핸들러의 상호작용을 쉽게 이해할 수 있다.
+- 새로운 채널이 할당 될 때마다 새로운 파이프라인이 할당된다. 이 연결은 영구적이며 네티 수명주기에 고정된 작업이므로 개발자가 관여하지 않아도 된다.
+
+- 채널 파이프라인의 이벤트 전달 방향은 인바운드는 왼쪽에서 오른 쪽 끝으로, 아웃바운드는 오른쪽 끝에서 왼쪽으로 잔달된다.
+- 채널 파이프라인은 유연하게 추가/삭제가 가능해서 손쉽게 동적으로 재구성이 가능하다.
+
+> 채널 핸들러 실행과 블로킹
+
+- 일반적으로 채널 파이프라인의 핸들러는 이벤트 루프를 통해 처리 되기 때문에, 전체 성능의 부정적인 영향을 방지하기 위해 이 스레드가 블로킹되지 않게 하는 것이 중요하다.
+- 하지만 레거시 코드와 인터페이스 해야할 경우가 있는데, 이와 같은 경우에 채널 파이프라인에 EventExecutorGroup를 받는 add 메소드가 있다.
+- 이벤트가 커스텀 이벤트 그룹으로 전달되면, 이벤트 그룹에 포함된 executor 중 하나에 의해 처리되며 채널의 이벤트루프에서는 제거된다.
+- defaultEventExecutorGroup을 통해 구현할 수 있다.
+
+### ChannelHandlerContext
+
+- CTX(ChannelHandlerContext) 채널핸들러와 파이프라인 간의 연결을 나타내며 채널 핸들러를 파이프라인에 추가 할 때마다 생성된다.
+- 주된 기능은 연결된 핸들러와 동일 파이프라인 내의 다른 핸들러간의 상호작용이다.
+- 요약하면, ChannelHandlerContext는 핸들러마다 존재하며 파이프라인 내 다른 핸들러에게 이벤트를 전파할 수 있다.
+
+### @Sharable
+
+- @Sharable 어노테이션을 통해 여러 파이프라인에서 단일 채널 핸들러를 공유할 수 있다.
+    : 같은 채널 핸들러를 여러 채널에 공유하는 이유는 일반적인 이유로 어러 채널에서의 통계 정보를 얻기 위한 목적
+
+
+### 예외 처리
+
+- inboundhandler에서의 exceptionCaught 메소드 override를 구현하여 이벤트의 예외(연결, 읽기, 종료.. 등)를 감지할 수 있다.
+- 핸들러에서 예외가 발생하면 다음 핸들러로 이벤트는 전달되지 않는다.
+
+- outBoundHandler에서는 다음 메커니즘을 따른다.
+    + 모든 아웃바운드 작업은 ChannelFutureHandler를 반환하고, 작업이 완료되면 리스너를 통해 성공이나 오류에 대한 알림을 제공한다.
+    + 아웃 바운드 핸들러의 거의 모든 메소드는 channelPromise가 전달된다.
+ 
+> ChannelFuture 리스너를 통한 예외 처리 예 : 채널을 통해 이벤트를 전파할 경우 자주 쓰임.
+
+```java
+    ChannelFuture future = channel.writeAndFlush(byteBuf);
+    
+    future.addListener(new ChannelFutureListener() {  
+    
+        @override
+        public void operationComplete(ChannelFuture f) {
+            if(!f.isSuccess()){
+                f.cause().printStackTrace();
+                ...
+            }
+        }
+    })
+```
+
+> ChannelPromise 예 : 아웃바운드 자체 내에서 예외처리를 할 경우 promise를 통해 처리함.
+
+```java
+public class OutBoundExceptionHandler extends ChannelOutBoundHandlerAdapter {
+    @Override
+    public void write(ChannelHandlerContext ctx, Object msg, ChannelPromise promise){
+        promise.addLisener(new ChannelFutureListener(){
+           @Override
+            public void operationComplete(ChannelFuture f){
+               if(!f.isSuccess()){
+                   f.cause().printStackTrace();
+                    ..
+               }
+            }
+        });
+    }
+
+}
+```
+
+
 ## 7장. EventLoop 와 스레딩 모델
 
 ## 8장. 부트스트랩
